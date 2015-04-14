@@ -1,0 +1,88 @@
+#!/usr/bin/php
+<?php
+
+// Use http_proxy environment variable
+stream_context_set_default(array('http' => array(
+	'proxy' => str_replace("http://", "tcp://", getenv('http_proxy')),
+	'request_fulluri' => true
+)));
+
+$quotes = new BashOrgQuotes();
+$quote = $quotes->getQuote();
+$quote = $quotes::cleanupQuote($quote);
+echo $quote."\n";
+
+class Quotes {
+
+	private $quotefile = ''; // Quote cache location
+	private $quotes = array(); // Quotes
+
+	function __construct() {
+		$this->quotefile = getenv('HOME')."/.bashqdb";
+		$this->quotefp = fopen($this->quotefile,"c+");
+		// Only one instance accessing the cache at a time
+		if (!flock($this->quotefp, LOCK_EX))
+			throw new Exception('Could not lock quote cache');
+		$this->cacheRead();
+	}
+
+	function __destruct() {
+		$this->fillIfEmpty();
+		$this->cacheWrite();
+		flock($this->quotefp, LOCK_UN);
+		fclose($this->quotefp);
+	}
+
+	function cacheRead() {
+		$cache = file($this->quotefile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES | FILE_TEXT);
+		if ($cache) {
+			$this->quotes = $cache;
+		} else {
+			//throw new Exception('Could not read quote cache');
+			$this->quotes = array();
+		}
+	}
+
+	function cacheWrite() {
+		if (FALSE === file_put_contents($this->quotefile, implode("\n", $this->quotes))) {
+			throw new Exception('Could not write quote cache');
+		}
+	}
+
+	function fillIfEmpty() {
+		if (!$this->quotes)
+			$this->quotes = $this->fetchQuotes();
+	}
+
+	function getQuote() {
+		$quote = array_pop($this->quotes);
+		$this->fillIfEmpty();
+		if (!$quote) { // This is not good enough error handling
+			$quote = array_pop($this->quotes);
+			$this->fillIfEmpty();
+		}
+		return $quote;
+	}
+}
+
+class BashOrgQuotes extends Quotes {
+	function fetchQuotes() { // */p[@class='qt']
+		$matches = array();
+		$source = file_get_contents("http://bash.org/?random1");
+		// @todo Handle failure
+		preg_match_all("/<p class=\"qt\">(.+?)<\/p>/si", $source, $matches);
+		$quotes = array();
+		foreach ($matches[1] as $match) {
+			$quotes[] = str_replace("\n","",$match);
+		}
+		return $quotes;
+	}
+
+	static function cleanupQuote($quote) {
+		$quote = html_entity_decode($quote);
+		$quote = str_replace("<br />","\n",$quote);
+		return $quote;
+	}
+}
+// http://www.qdb.us/api
+?>
