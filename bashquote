@@ -101,9 +101,10 @@ class BashOrgQuotes extends Quotes {
 	 */
 	function fetchQuotes() {
 		libxml_use_internal_errors(TRUE);
-		$doc = DOMDocument::loadHTMLFile("http://bash.org/?random1");
+		$doc = new DOMDocument;
+    $doc->loadHTMLFile("http://bash.org/?random1");
 		$xpath = new DOMXPath($doc);
-		$elements = $xpath->query('//p[@class="qt"]');
+    $elements = $xpath->query('//p[@class="qt"]');
 		$quotes = array();
 		foreach ($elements as $element) {
 			$quote = $element->textContent;
