@@ -2,21 +2,29 @@
 <?php
 
 // Use http_proxy environment variable
-stream_context_set_default(array('http' => array(
-	'proxy' => str_replace("http://", "tcp://", getenv('http_proxy')),
-	'request_fulluri' => true
-)));
+if ($proxy = str_replace("http://", "tcp://", getenv('http_proxy')))
+	stream_context_set_default(array('http' => array('proxy' => $proxy,'request_fulluri' => true)));
 
 $quotes = new BashOrgQuotes();
 $quote = $quotes->getQuote();
 $quote = $quotes::cleanupQuote($quote);
 echo $quote."\n";
 
-class Quotes {
+/**
+ * Quotes class
+ *
+ * A generic class for fetching quotes
+ */
+abstract class Quotes {
 
 	private $quotefile = ''; // Quote cache location
 	private $quotes = array(); // Quotes
 
+/**
+ * Class constructur
+ *
+ * Opens the quote cache.
+ */
 	function __construct() {
 		$this->quotefile = getenv('HOME')."/.bashqdb";
 		$this->quotefp = fopen($this->quotefile,"c+");
@@ -26,6 +34,11 @@ class Quotes {
 		$this->cacheRead();
 	}
 
+/**
+ * Class destructor
+ *
+ * Fills the cache (if needed), and writes it back to disk.
+ */
 	function __destruct() {
 		$this->fillIfEmpty();
 		$this->cacheWrite();
@@ -33,6 +46,9 @@ class Quotes {
 		fclose($this->quotefp);
 	}
 
+	/**
+	 * Read the cache contents
+	 */
 	function cacheRead() {
 		$cache = file($this->quotefile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES | FILE_TEXT);
 		if ($cache) {
@@ -43,29 +59,43 @@ class Quotes {
 		}
 	}
 
+	/**
+	 * Write the cache contents to disk
+	 */
 	function cacheWrite() {
 		if (FALSE === file_put_contents($this->quotefile, implode("\n", $this->quotes))) {
 			throw new Exception('Could not write quote cache');
 		}
 	}
 
+	/**
+	 * Checks if the cache is empty, and if so, fills it.
+	 */
 	function fillIfEmpty() {
 		if (!$this->quotes)
 			$this->quotes = $this->fetchQuotes();
 	}
 
+	/**
+	 * Get a single quote
+	 */
 	function getQuote() {
 		$quote = array_pop($this->quotes);
-		$this->fillIfEmpty();
 		if (!$quote) { // This is not good enough error handling
-			$quote = array_pop($this->quotes);
 			$this->fillIfEmpty();
+			$quote = array_pop($this->quotes);
 		}
 		return $quote;
 	}
 }
 
+/**
+ * Class for handling quotes from bash.org
+ *
+ * Implementation of class Quotes
+ */
 class BashOrgQuotes extends Quotes {
+
 	function fetchQuotes() { // */p[@class='qt']
 		$matches = array();
 		$source = file_get_contents("http://bash.org/?random1");
@@ -84,5 +114,5 @@ class BashOrgQuotes extends Quotes {
 		return $quote;
 	}
 }
-// http://www.qdb.us/api
+
 ?>
