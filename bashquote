@@ -7,7 +7,6 @@ if ($proxy = str_replace("http://", "tcp://", getenv('http_proxy')))
 
 $quotes = new BashOrgQuotes();
 $quote = $quotes->getQuote();
-$quote = $quotes::cleanupQuote($quote);
 echo $quote."\n";
 
 /**
@@ -50,7 +49,7 @@ abstract class Quotes {
 	 * Read the cache contents
 	 */
 	function cacheRead() {
-		$cache = file($this->quotefile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES | FILE_TEXT);
+		$cache = unserialize(file_get_contents($this->quotefile));
 		if ($cache) {
 			$this->quotes = $cache;
 		} else {
@@ -63,7 +62,7 @@ abstract class Quotes {
 	 * Write the cache contents to disk
 	 */
 	function cacheWrite() {
-		if (FALSE === file_put_contents($this->quotefile, implode("\n", $this->quotes))) {
+		if (FALSE === file_put_contents($this->quotefile, serialize($this->quotes))) {
 			throw new Exception('Could not write quote cache');
 		}
 	}
@@ -87,6 +86,7 @@ abstract class Quotes {
 		}
 		return $quote;
 	}
+
 }
 
 /**
@@ -96,22 +96,22 @@ abstract class Quotes {
  */
 class BashOrgQuotes extends Quotes {
 
-	function fetchQuotes() { // */p[@class='qt']
-		$matches = array();
-		$source = file_get_contents("http://bash.org/?random1");
-		// @todo Handle failure
-		preg_match_all("/<p class=\"qt\">(.+?)<\/p>/si", $source, $matches);
+	/**
+	 * Fetch and parse a batch of random quotes from bash.org
+	 */
+	function fetchQuotes() {
+		libxml_use_internal_errors(TRUE);
+		$doc = DOMDocument::loadHTMLFile("http://bash.org/?random1");
+		$xpath = new DOMXPath($doc);
+		$elements = $xpath->query('//p[@class="qt"]');
 		$quotes = array();
-		foreach ($matches[1] as $match) {
-			$quotes[] = str_replace("\n","",$match);
+		foreach ($elements as $element) {
+			$quote = $element->textContent;
+			$quote = html_entity_decode($quote);
+			$quote = str_replace("<br />", "\n", $quote);
+			$quotes[] = $quote;
 		}
 		return $quotes;
-	}
-
-	static function cleanupQuote($quote) {
-		$quote = html_entity_decode($quote);
-		$quote = str_replace("<br />","\n",$quote);
-		return $quote;
 	}
 }
 
