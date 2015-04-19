@@ -25,7 +25,10 @@ abstract class Quotes {
  * Opens the quote cache.
  */
 	function __construct() {
-		$this->quotefile = getenv('HOME')."/.bashqdb";
+    if (file_exists(getenv('HOME')."/.bashqdb")) // Clean up old style cache
+      unlink(getenv('HOME')."/.bashqdb");
+
+		$this->quotefile = sys_get_temp_dir() . PATH_SEPARATOR . "bashquote_cache";
 		$this->quotefp = fopen($this->quotefile,"c+");
 		// Only one instance accessing the cache at a time
 		if (!flock($this->quotefp, LOCK_EX))
