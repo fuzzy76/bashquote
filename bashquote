@@ -11,7 +11,10 @@ $provider = (isset($opts['p']) ? $opts['p'] : 'bash');
 
 if (isset($opts['h']) || isset($opts['help'])) {
   echo "-h / --help This helptext\n";
-  echo "-p provider Choose provider (bash, qdb or ingdal)\n";
+  echo "-f          Force flush all caches\n";
+  echo "-p provider Choose provider\n";
+  echo "\n";
+  echo "Providers are bash (default), qdb and ingdal.\n";
   return;
 }
 
