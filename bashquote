@@ -2,10 +2,24 @@
 <?php
 
 // Use http_proxy environment variable
-if ($proxy = str_replace("http://", "tcp://", getenv('http_proxy')))
-	stream_context_set_default(array('http' => array('proxy' => $proxy,'request_fulluri' => true)));
 
-$quotes = new BashOrgQuotes();
+if ($proxy = str_replace("http://", "tcp://", getenv('http_proxy')))
+  stream_context_set_default(array('http' => array('proxy' => $proxy,'request_fulluri' => true)));
+
+$opts = getopt('p:hf',array('help'));
+$provider = (isset($opts['p']) ? $opts['p'] : 'bash');
+
+if (isset($opts['h']) || isset($opts['help'])) {
+  echo "-h / --help This helptext\n";
+  echo "-p provider Choose provider (bash, qdb or ingdal)\n";
+  return;
+}
+
+if (isset($opts['f']) || isset($opts['flush'])) {
+  unlink(sys_get_temp_dir() . PATH_SEPARATOR . "bashquote_cache");
+}
+
+$quotes = new Quotes($provider);
 $quote = $quotes->getQuote();
 echo $quote."\n";
 
@@ -14,20 +28,24 @@ echo $quote."\n";
  *
  * A generic class for fetching quotes
  */
-abstract class Quotes {
+class Quotes {
 
 	private $quotefile = ''; // Quote cache location
 	private $quotes = array(); // Quotes
+  private $provider = '';
 
 /**
  * Class constructur
  *
+ * @param string $provider
+ * @throws Exception
  * Opens the quote cache.
  */
-	function __construct() {
+	function __construct($provider) {
     if (file_exists(getenv('HOME')."/.bashqdb")) // Clean up old style cache
       unlink(getenv('HOME')."/.bashqdb");
 
+    $this->provider = $provider;
 		$this->quotefile = sys_get_temp_dir() . PATH_SEPARATOR . "bashquote_cache";
 		$this->quotefp = fopen($this->quotefile,"c+");
 		// Only one instance accessing the cache at a time
@@ -74,49 +92,77 @@ abstract class Quotes {
 	 * Checks if the cache is empty, and if so, fills it.
 	 */
 	function fillIfEmpty() {
-		if (!$this->quotes)
-			$this->quotes = $this->fetchQuotes();
+		if (!$this->quotes[$this->provider])
+			$this->quotes[$this->provider] = $this->fetchQuotes();
 	}
 
 	/**
 	 * Get a single quote
 	 */
 	function getQuote() {
-		$quote = array_pop($this->quotes);
+    $quote = NULL;
+    if (isset($this->quotes[$this->provider])) {
+      $quote = array_pop($this->quotes[$this->provider]);
+    }
 		if (!$quote) { // This is not good enough error handling
 			$this->fillIfEmpty();
-			$quote = array_pop($this->quotes);
+			$quote = array_pop($this->quotes[$this->provider]);
 		}
 		return $quote;
 	}
 
+  /**
+   * Fetch and parse a batch of quotes
+   */
+  function fetchQuotes() {
+    $conf = self::getProviderConfig($this->provider);
+    libxml_use_internal_errors(TRUE);
+    $doc = new DOMDocument;
+    $doc->loadHTMLFile($conf['url']);
+    $xpath = new DOMXPath($doc);
+    $elements = $xpath->query($conf['xpath']);
+    $quotes = array();
+    foreach ($elements as $element) {
+      print_r($element);
+      $quote = trim($element->textContent);
+      switch ($conf['type']) {
+        case 'pre':
+          $quote = html_entity_decode($quote);
+          break;
+        case 'html':
+          $quote = str_replace(array("\n", "\r"), "", $quote);
+          $quote = html_entity_decode($quote);
+          $quote = str_replace(array("<br />", "<br>"), "\n", $quote);
+      }
+      $quotes[] = $quote;
+    }
+    return $quotes;
+  }
+
+  /**
+   * Get provider definitions
+   */
+  static function getProviderConfig($provider) {
+    $configs = array(
+      'bash' => array(
+        'url' => 'http://bash.org/?random1',
+        'xpath' => '//p[@class="qt"]',
+        'type' => 'pre'
+      ),
+      'ingdal' => array(
+        'url' => 'http://bash.ingdal.net/?random2',
+        'xpath' => '//div[@class="quote_quote"]',
+        'type' => 'pre'
+      ),
+      'qdb' => array(
+        'url' => 'http://qdb.us/qdb.xml?action=random&fixed=0&client=bashquote',
+        'xpath' => '//description',
+        'type' => 'html'
+      ),
+    );
+    if (isset($configs[$provider]))
+      return $configs[$provider];
+    return NULL;
+  }
 }
 
-/**
- * Class for handling quotes from bash.org
- *
- * Implementation of class Quotes
- */
-class BashOrgQuotes extends Quotes {
-
-	/**
-	 * Fetch and parse a batch of random quotes from bash.org
-	 */
-	function fetchQuotes() {
-		libxml_use_internal_errors(TRUE);
-		$doc = new DOMDocument;
-    $doc->loadHTMLFile("http://bash.org/?random1");
-		$xpath = new DOMXPath($doc);
-    $elements = $xpath->query('//p[@class="qt"]');
-		$quotes = array();
-		foreach ($elements as $element) {
-			$quote = $element->textContent;
-			$quote = html_entity_decode($quote);
-			$quote = str_replace("<br />", "\n", $quote);
-			$quotes[] = $quote;
-		}
-		return $quotes;
-	}
-}
-
-?>
