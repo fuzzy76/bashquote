@@ -126,7 +126,6 @@ class Quotes {
     $elements = $xpath->query($conf['xpath']);
     $quotes = array();
     foreach ($elements as $element) {
-      print_r($element);
       $quote = trim($element->textContent);
       switch ($conf['type']) {
         case 'pre':
@@ -168,4 +167,3 @@ class Quotes {
     return NULL;
   }
 }
-
