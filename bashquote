@@ -33,9 +33,10 @@ echo $quote."\n";
  */
 class Quotes {
 
-	private $quotefile = ''; // Quote cache location
-	private $quotes = array(); // Quotes
+  private $quotefile = ''; // Quote cache location
+  private $quotes = array(); // Quotes
   private $provider = '';
+  private $quotefp = null;
 
 /**
  * Class constructur
